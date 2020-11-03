@@ -17,13 +17,12 @@
 */
 
 #include "Nugget.h"
-#include "pyrrhic/tbprobe.h"
 
 vector<string> args;
 Position *root_position = &main_thread.position;
-extern unsigned TB_PROBE_DEPTH;
-extern volatile bool ANALYSISMODE;
-extern volatile bool is_pondering;
+volatile bool ISPONDERING = false;
+volatile bool STOPSEARCHING = false;
+int depthLimit = MAX_PLY;
 extern timeInfo globalLimits;
 Position globalPosition;
 
@@ -34,19 +33,12 @@ bool word_equal(int index, string comparison_str) {
 }
 
 vector<string> split_words(string s) {
-    vector <string> tmp;
-    unsigned l_index = 0;
-    for (unsigned i = 0 ; i < s.length() ; i++) {
-        if (s[i] == ' ') {
-            tmp.push_back(s.substr(l_index, i - l_index));
-            l_index = i + 1;
-        }
-        if (i == s.length() - 1) {
-            tmp.push_back(s.substr(l_index));
-        }
-    }
+    vector<string> out;
+    istringstream iss(s);
+    for(string t; iss >> t; )
+        out.push_back(t);
 
-    return tmp;
+    return out;
 }
 
 Move uci2Move(Position *pos, string s)
@@ -66,21 +58,20 @@ Move uci2Move(Position *pos, string s)
     else if (pc >= WKING && (abs(from - to) == 2 || (BITSET(to) & pos->pieceBB[make_piece(pos->activeSide, ROOK)])))
     {
         if (abs(from - to) == 2)
-            to = (to > from) ? to + 1 : to - 2;
+            to = (to > from) ? to + 1 : to - 2; // convert to king-captures-rook
         type = CASTLING;
     }
 
     return makeMove(from, to, type);
 }
 
-void startpos()
+void setPosition(string fen, int movesindex)
 {
-    //root_position = start_position();
-    globalPosition.readFEN(STARTFEN);
+    globalPosition.readFEN(fen.c_str());
 
-    if (word_equal(2, "moves"))
+    if (word_equal(movesindex, "moves"))
     {
-        for (unsigned i = 3 ; i < args.size() ; i++) {
+        for (unsigned i = movesindex + 1 ; i < args.size() ; i++) {
             Move m = MOVE_NONE;
             if (args[i].length() == 4 || args[i].length() == 5)
             {
@@ -100,39 +91,11 @@ void startpos()
     }
 }
 
-void cmd_fen()
-{
-    string fen = args[2] + " " + args[3] + " " + args[4] + " " + args[5] + " " + args[6] + " " + args[7];
-    //root_position = import_fen(fen.c_str(), 0);
-    globalPosition.readFEN(fen.c_str());
-
-    if (word_equal(8, "moves"))
-    {
-        for (unsigned i = 9 ; i < args.size() ; i++) {
-            Move m = MOVE_NONE;
-            if (args[i].length() == 4 || args[i].length() == 5)
-            {
-                m = uci2Move(&globalPosition, args[i]);
-                if (args[i].length() == 5)
-                {
-                    PieceType promote = GetPieceType(args[i][4]);
-                    m = Move(m | ((promote - KNIGHT) << 12));
-                }
-            }
-            if (m != MOVE_NONE && globalPosition.isPseudoLegal(m)) {
-                globalPosition.do_move(m);
-            if (globalPosition.halfmoveClock == 0)
-                globalPosition.historyIndex = 0;
-            }
-        }
-    }
-}
-
 void prepareThreads()
 {
     memcpy(&main_thread.position, &globalPosition, sizeof(Position));
     main_thread.position.my_thread = &main_thread;
-    get_ready();
+    clear_stacks();
 }
 
 void ucinewgame()
@@ -171,19 +134,31 @@ void perft()
 }
 
 void cmd_position() {
+    string fen;
+    int movesIndex = 0;
     if (args[1] == "fen")
-        cmd_fen();
-    if (args[1] == "startpos")
-        startpos();
+    {
+        for (movesIndex = 2;movesIndex <=7;movesIndex++)
+        {
+            if (args[movesIndex] == "moves")
+                break;
+            fen += args[movesIndex] + " ";
+        }
+    }
+
+    else if (args[1] == "startpos")
+    {
+        fen = STARTFEN;
+        movesIndex = 3;
+    }
+
+    setPosition(fen, movesIndex);
 }
 
 void option(string name, string value) {
     if (name == "Hash")
     {
         int mb = stoi(value);
-        if (!mb || MORETHANONE(uint64_t(mb))) {
-            cout << "info Hash value needs to be a power of 2!" << endl;
-        }
         reset_tt(mb);
     }
     else if (name == "Threads")
@@ -194,40 +169,9 @@ void option(string name, string value) {
     {
         move_overhead = stoi(value);
     }
-    else if (name == "BookFile")
-    {
-        openingBookPath = value;
-        book.init(value);
-    }
-    else if (name == "BestBookLine")
-    {
-        if (value == "true")
-            book.set_use_best(true);
-        else if (value == "false")
-            book.set_use_best(false);
-    }
-    else if (name == "MaxBookDepth")
-    {
-        book.set_max_depth(stoi(value));
-    }
     else if (name == "ClearHash")
     {
         clear_tt();
-    }
-    else if (name == "SyzygyProbeDepth")
-    {
-        TB_PROBE_DEPTH = stoi((value));
-    }
-    else if (name == "SyzygyPath")
-    {
-        tb_init(value.c_str());
-    }
-    else if (name == "AnalysisMode")
-    {
-        if (value == "true")
-            ANALYSISMODE = true;
-        else if (value == "false")
-            ANALYSISMODE = false;
     }
 }
 
@@ -252,7 +196,7 @@ void debug()
 {
     prepareThreads();
     cout << *root_position << endl;
-    searchInfo *info = &main_thread.ss[2];
+    searchInfo *info = &main_thread.ss[3];
     MoveGen movegen = MoveGen(root_position, NORMAL_SEARCH, MOVE_NONE, 0, 0);
     Move m;
     cout << "Move ordering: " << endl;
@@ -270,22 +214,7 @@ void uci() {
     cout << "option name Threads type spin default 1 min 1 max " << MAX_THREADS << endl;
     cout << "option name MoveOverhead type spin default 100 min 0 max 5000" << endl;
     cout << "option name Ponder type check default false" << endl;
-    cout << "option name BookFile type string default <empty>" << endl;
-    cout << "option name BestBookLine type check default true" << endl;
-    cout << "option name MaxBookDepth type spin default 255 min 1 max 255" << endl;
-    cout << "option name SyzygyPath type string default <empty>" << endl;
-    cout << "option name SyzygyProbeDepth type spin default 0 min 0 max 127" << endl;
-    cout << "option name AnalysisMode type check default false" << endl;
     cout << "uciok" << endl;
-}
-
-void stop() {
-    is_timeout = true;
-    is_pondering = false;
-}
-
-void isready() {
-    cout << "readyok" << endl;
 }
 
 void go() {
@@ -294,7 +223,7 @@ void go() {
     bool infinite = false, timelimited = false, depthlimited = false;
     int wtime = 0, btime = 0, movetime = 0;
     int winc = 0, binc = 0, movestogo = 0;
-    think_depth_limit = MAX_PLY;
+    depthLimit = MAX_PLY;
     memset(&globalLimits, 0, sizeof(timeInfo));
 
     if (args.size() <= 1) {
@@ -340,7 +269,7 @@ void go() {
 
             else if (args[i] == "ponder")
             {
-                is_pondering = true;
+                ISPONDERING = true;
             }
             else if (args[i] == "infinite")
             {
@@ -365,58 +294,6 @@ void go() {
 
     std::thread think_thread(think, root_position);
     think_thread.detach();
-    //pthread_t gothread;
-    //pthread_create(&gothread, NULL, &think, root_position);
-    //pthread_detach(gothread);
-}
-
-void eval() {
-    prepareThreads();
-    cout << trace(*root_position) << endl;
-}
-
-void ponderhit() {
-    is_pondering = false;
-}
-
-void see() {
-    prepareThreads();
-    Move m = uci2Move(root_position, args[1]);
-    cout << root_position->see(m, 0) << endl;
-}
-
-void run(string s)
-{
-    if (s == "ucinewgame")
-        ucinewgame();
-    if (s == "position")
-        cmd_position();
-    if (s == "go")
-        go();
-    if (s == "setoption")
-        setoption();
-    if (s == "set")
-        setoption_fast();
-    if (s == "isready")
-        isready();
-    if (s == "uci")
-        uci();
-    if (s == "perft")
-        perft();
-    if (s == "debug")
-        debug();
-    if (s == "quit")
-        exit(0);
-    if (s == "stop")
-        stop();
-    if (s == "see")
-        see();
-    if (s == "bench")
-        bench();
-    if (s == "eval")
-        eval();
-    if (s == "ponderhit")
-        ponderhit();
 }
 
 void loop()
@@ -436,7 +313,33 @@ void loop()
         args = split_words(input);
         if (args.size() > 0)
         {
-            run(args[0]);
+            if (args[0] == "ucinewgame")
+                ucinewgame();
+            if (args[0] == "position")
+                cmd_position();
+            if (args[0] == "go")
+                go();
+            if (args[0] == "setoption")
+                setoption();
+            if (args[0] == "set")
+                setoption_fast();
+            if (args[0] == "isready")
+                cout << "readyok" << endl;
+            if (args[0] == "uci")
+                uci();
+            if (args[0] == "perft")
+                perft();
+            if (args[0] == "debug")
+                debug();
+            if (args[0] == "quit")
+                break;
+            if (args[0] == "stop")
+            {
+                STOPSEARCHING = true;
+                ISPONDERING = false;
+            }
+            if (args[0] == "ponderhit")
+                ISPONDERING = false;
         }
     }
 }

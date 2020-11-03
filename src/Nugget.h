@@ -53,10 +53,11 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <setjmp.h>
+#include <chrono>
 
 
 #define NAME "Nugget"
-#define VERSION "0.3.6"
+#define VERSION "1.00"
 #define AUTHOR "Jonathan Tseng"
 
 #if defined(_WIN32) || defined(_WIN64)
@@ -193,6 +194,7 @@ constexpr U64 outpost_ranks[2] = { Rank4BB | Rank5BB | Rank6BB,
 constexpr U64 queenSide = FileABB | FileBBB | FileCBB | FileDBB;
 constexpr U64 centerFiles = FileCBB | FileDBB | FileEBB | FileFBB;
 constexpr U64 kingSide = FileEBB | FileFBB | FileGBB | FileHBB;
+constexpr U64 centerSquare = centerFiles & (Rank3BB | Rank4BB | Rank5BB | Rank6BB);
 
 constexpr U64 flank_files[8] = { queenSide,
                                 queenSide,
@@ -285,7 +287,7 @@ constexpr PieceCode make_piece(Color c, PieceType pt) {
 #define ONEORZERO(x) (!MORETHANONE(x))
 #define ONLYONE(x) (!MORETHANONE(x) && x)
 
-#define PAWNATTACKS(s, x) ((s) ? ((shift<SOUTH_EAST>(x)) | (shift < SOUTH_WEST> (x))) : ((shift <NORTH_EAST> (x)) | (shift <NORTH_WEST> (x))))
+#define PAWNATTACKS(s, x) ((s) ? ((shift<SOUTH_EAST>(x)) | (shift <SOUTH_WEST> (x))) : ((shift <NORTH_EAST> (x)) | (shift <NORTH_WEST> (x))))
 #define STARTFEN "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 
 #define SIDESWITCH 0x01
@@ -442,11 +444,15 @@ extern U64 kingRing[64];
 extern int mvvlva[14][14];
 extern U64 distanceRings[64][8];
 extern U64 colorMasks[64];
+extern U64 connectedMasks[64];
 extern int squareDistance[64][64];
 extern uint8_t PopCnt16[1 << 16];
 
 extern SMagic mBishopTbl[64];
 extern SMagic mRookTbl[64];
+
+extern const int pieceValues[2][14];
+extern const int nonPawnValue[14];
 
 inline int POPCOUNT(uint64_t x)
 {
@@ -471,7 +477,7 @@ void init_magics(U64 attackTable[], SMagic magics[], U64* masks, U64(*func)(U64,
 void init_values();
 void init_threads();
 void reset_threads(int thread_num);
-void get_ready();
+void clear_stacks();
 
 U64 rookAttacks_slow(U64 occ, int sq);
 U64 bishopAttacks_slow(U64 occ, int sq);
@@ -741,7 +747,7 @@ struct TTEntry
     int16_t value;
     int16_t static_eval;
     uint8_t depth;
-    uint8_t flags;
+    uint8_t flags; // 6 bits age, 2 bits bound
 };
 
 inline uint8_t tte_flag(TTEntry* tte) {
@@ -769,7 +775,10 @@ struct transpositionTable
 
 extern transpositionTable TT;
 
-void start_search();
+inline void increment_TT_age() {
+    TT.generation += 4; // overflows every 64 increments
+}
+
 void init_tt();
 void clear_tt();
 void reset_tt(int MB);
@@ -783,9 +792,12 @@ struct pawnhashEntry
 {
     U64 pawn_hash;
     Score scores[2];
+    int16_t netScore;
     U64 passedPawns[2];
-    int kingpos[2];
+    //uint8_t kingpos[2]; // right now kingpos not useful
     uint8_t semiopenFiles[2];
+    uint8_t doubledFiles[2];
+    uint8_t defendedFiles[2];
 };
 
 class Eval {
@@ -795,15 +807,22 @@ public:
 private:
     const Position& pos;
     pawnhashEntry* pawntte;
-    void pre_eval();
-    void evaluate_pawns();
-    template <Color side> void evaluate_pawn_structure();
+    void prepare_info();
+    void evaluate_pawns(); // use evaluate_pawn_structure to update the pawn entry
+    template <Color side> Score evaluate_pawn_structure();
     template <Color side> Score evaluate_passers();
     template <Color side, PieceType type> Score evaluate_piece();
+    Score evaluate_pairs();
+    template <Color side> Score kingSafetyScore();
     U64 mobility_area[2];
-    Score mobility[2] = {S(0,0), S(0,0)};
+    U64 king_ring[2];
     U64 double_targets[2];
     U64 attackedSquares[14];
+    uint8_t king_attacks_count[2];
+    uint8_t king_attackers_count[2];
+    uint16_t king_attackers_weight[2];
+    uint8_t king_defenders_count[2];
+    uint16_t king_defenders_weight[2];
 };
 
 int evaluate(const Position& p);
@@ -833,10 +852,11 @@ struct SearchThread
 {
     Position position;
     searchInfo ss[MAX_PLY + 3];
-    int16_t historyTable[2][64][64];
+    int16_t historyTable[2][64][64]; // butterfly
+    int16_t evasionTable[2][14][64]; // piece-To because piece matters for evasions
     Move counterMoveTable[14][64];
     pieceToHistory counterMove_history[14][64];
-    int16_t capture_history[14][64][6];
+    int16_t capture_history[14][64][6]; // piece-To-capture
     uint16_t thread_id;
     int16_t seldepth;
     U64 nodes;
@@ -854,7 +874,7 @@ inline pawnhashEntry* get_pawntte(const Position& pos)
 
 inline bool is_main_thread(Position* p) { return p->my_thread->thread_id == 0; }
 
-extern int num_threads;
+extern int threadCount;
 extern SearchThread main_thread;
 extern SearchThread* search_threads;
 
@@ -868,27 +888,23 @@ inline int lmr(bool improving, int depth, int num_moves) {
     return reductions[improving][std::min(depth, 63)][std::min(num_moves, 63)];
 }
 
-extern struct timeval curr_time, start_ts;
 extern int startTime;
 
-extern int timer_count,
-ideal_usage,
-max_usage,
-think_depth_limit;
+extern int ideal_usage, max_usage, depthLimit;
 
 extern bool is_movetime;
 
-extern volatile bool is_timeout, is_pondering;
+extern volatile bool STOPSEARCHING, ISPONDERING;
 
-int getRealTime();
+int getCurrentTime();
 
 inline int time_passed() {
-    return getRealTime() - startTime;
+    return getCurrentTime() - startTime;
 }
 
 inline U64 sum_nodes() {
     U64 s = 0;
-    for (int i = 0; i < num_threads; ++i) {
+    for (int i = 0; i < threadCount; ++i) {
         SearchThread* t = (SearchThread*)get_thread(i);
         s += t->nodes;
     }
@@ -897,7 +913,7 @@ inline U64 sum_nodes() {
 
 inline U64 sum_tb_hits() {
     U64 s = 0;
-    for (int i = 0; i < num_threads; ++i) {
+    for (int i = 0; i < threadCount; ++i) {
         SearchThread *t = (SearchThread*)get_thread(i);
         s += t->tb_hits;
     }
@@ -905,7 +921,7 @@ inline U64 sum_tb_hits() {
 }
 
 inline void initialize_nodes() {
-    for (int i = 0; i < num_threads; ++i) {
+    for (int i = 0; i < threadCount; ++i) {
         SearchThread* t = (SearchThread*)get_thread(i);
         t->nodes = 0;
         t->tb_hits = 0;
@@ -925,9 +941,9 @@ struct timeInfo {
     int increment;
     int movetime;
     int depthlimit;
-    bool timelimited;
-    bool depthlimited;
-    bool infinite;
+    bool timelimited; // "movetime" mode
+    bool depthlimited; // "depth" mode
+    bool infinite; // "infinite" mode; if none of these flags are set, then time is managed
 };
 
 timeTuple calculate_time();
@@ -958,6 +974,8 @@ constexpr U64 bishopMagics[] = { 0x40106000a1160020, 0x0020010250810120, 0x20100
 
 
 void bench();
+void think(Position *p);
+void loop();
 
 //Ethereal bench positions
 const std::string benchmarks[36] = {
@@ -998,3 +1016,119 @@ const std::string benchmarks[36] = {
     "6k1/3b3r/1p1p4/p1n2p2/1PPNpP1q/P3Q1p1/1R1RB1P1/5K2 b - - 0 1",
     "r2r1n2/pp2bk2/2p1p2p/3q4/3PN1QP/2P3R1/P4PP1/5RK1 w - - 0 1",
 };
+
+
+/****************************** Eval Terms ************************************************/
+constexpr int lazyThreshold = 1300;
+constexpr int NETSCALEFACTOR = 115;
+constexpr int tempo = 30;
+
+constexpr bool isEdge[64] = {1, 0, 0, 0, 0, 0, 0, 1,
+                                1, 0, 0, 0, 0, 0, 0, 1,
+                                1, 0, 0, 0, 0, 0, 0, 1,
+                                1, 0, 0, 0, 0, 0, 0, 1,
+                                1, 0, 0, 0, 0, 0, 0, 1,
+                                1, 0, 0, 0, 0, 0, 0, 1,
+                                1, 0, 0, 0, 0, 0, 0, 1,
+                                1, 0, 0, 0, 0, 0, 0, 1};
+extern const Score knightMobilityBonus[9];
+
+extern const Score bishopMobilityBonus[14];
+
+extern const Score rookMobilityBonus[15];
+
+extern const Score queenMobilityBonus[28];
+
+extern const int PAWN_MG;
+extern const int PAWN_EG;
+extern const int KNIGHT_MG;
+extern const int KNIGHT_EG;
+extern const int BISHOP_MG;
+extern const int BISHOP_EG;
+extern const int ROOK_MG;
+extern const int ROOK_EG;
+extern const int QUEEN_MG;
+extern const int QUEEN_EG;
+extern const int KING_MG;
+extern const int KING_EG;
+
+extern const Score piece_bonus[7][64];
+
+extern const Score passedRankBonus[8];
+
+extern const Score passedUnsafeBonus[2][8];
+
+extern const Score passedBlockedBonus[2][8];
+
+extern const Score passedFriendlyDistance[8];
+
+extern const Score passedEnemyDistance[8];
+
+extern const Score passedConnectedBonus[8];
+
+extern const Score passedClearPath[8];
+
+extern const Score passedSafePath[8];
+
+extern const Score tarraschRule_enemy;
+extern const Score tarraschRule_friendly[8];
+
+extern const Score isolated_penalty[2];
+extern const Score isolated_penaltyAH[2];
+extern const Score isolated_doubled_penalty[2];
+extern const Score isolated_doubled_penaltyAH[2];
+extern const Score doubled_penalty[2];
+extern const Score doubled_penalty_undefended[2];
+extern const Score backward_penalty[2];
+
+extern const Score supported_bonus[2][8];
+extern const Score phalanx_bonus[2][8];
+
+extern const Score rookFile[4]; // semiopen, defended semiopen, doubled (weak) semiopen, open
+
+extern int kingDangerBase;
+extern int attackerWeights[7];
+extern int kingAttack; // square in ring that's attacked
+extern int defenderWeights[7];
+extern int kingDefense; // my own piece is defending
+extern int kingWeak; // square in ring that's attacked and not defended enough
+extern int kingPin; // piece that's pinned
+extern int discoveredCheck; // an opportunity for a discovered check
+extern int safeChecks[7];
+extern int unsafeChecks[7];
+extern int contactChecks[2]; // Rook, Queen
+extern int kingMobilityWeight; // How much is being able to move worth?
+extern int noQueen;
+
+extern const Score diagTropism; // How bad is an open diagonal?
+extern const Score rookTropism; // How bad is an open file/rank?
+extern const Score backRank; // How bad is a weak back rank? (Scaled by how many open files we have)
+
+extern const Score pawnShieldBonus;
+extern const Score canCastle;
+
+extern const Score bishopPair;
+extern const Score knightPair;
+extern const Score rookPair;
+extern const Score knightPawn;
+extern const Score rookPawn;
+
+
+#define NETINPUTS 224
+#define NETHIDDEN 32
+
+struct kingNet
+{
+    float inputWeights[NETINPUTS][NETHIDDEN];
+    float inputBiases[NETHIDDEN];
+    float hiddenWeights[NETHIDDEN];
+    float hiddenBias;
+
+    float cache[NETHIDDEN];
+
+    void loadWeights(string path);
+    int getScore(const Position *p);
+    void calculateLine(int intputIndex);
+};
+
+extern kingNet Net;

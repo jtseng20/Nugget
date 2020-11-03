@@ -1,11 +1,11 @@
 /*
-  Beef is a UCI-compliant chess engine.
+  Nugget is a UCI-compliant chess engine.
   Copyright (C) 2020 Jonathan Tseng.
-  Beef is free software: you can redistribute it and/or modify
+  Nugget is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
   the Free Software Foundation, either version 3 of the License, or
   (at your option) any later version.
-  Beef is distributed in the hope that it will be useful,
+  Nugget is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
   GNU General Public License for more details.
@@ -13,7 +13,7 @@
   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include "Beef.h"
+#include "Nugget.h"
 
 const Score knightMobilityBonus[9] = {
     S(-71, -23), S(-70, -31), S(-50, 8), S(-40, 15),
@@ -136,6 +136,21 @@ const Score passedRankBonus[8] = {
     S(12, 96), S(8, 126), S(75, 156), S(0, 0)
 };
 
+const Score passedConnectedBonus[8] = {
+    S(0,0), S(0,0), S(0, 0), S(5, 5),
+    S(12, 12), S(20, 20), S(40, 30), S(0, 0)
+};
+
+const Score passedClearPath[8] = {
+    S(0,0), S(0,0), S(0, 0), S(5, 5),
+    S(12, 12), S(20, 20), S(40, 30), S(0, 0)
+};
+
+const Score passedSafePath[8] = {
+    S(0,0), S(0,0), S(0, 0), S(5, 5),
+    S(12, 12), S(20, 20), S(40, 30), S(0, 0)
+};
+
 const Score passedUnsafeBonus[2][8] = {
     {S(0,0), S(0,0), S(-16, 3), S(-12, 58), S(-47, 46), S(22, 92), S(-16, 187), S(0, 0)},
     {S(0,0), S(0,0), S(-16, -4), S(-9, 37), S(-26, -14), S(53, -49), S(82, -84), S(0, 0)},
@@ -178,6 +193,35 @@ const Score phalanx_bonus[2][8] = {
     {S(0, 0), S(13, -22), S(14, 0), S(37, 31), S(91, 89), S(101, 271), S(-164, 1043), S(0, 0)},
     {S(0, 0), S(-1, -22), S(3, -3), S(19, 0), S(39, 35), S(113, -57), S(0, 0), S(0, 0)}
 };
+
+const Score rookFile[4] = {S(29, -7),  S(1, -33), S(35, 0), S(40, 6)};
+
+int attackerWeights[7] = {0, 0, 37, 19, 14, 0, 0};
+int defenderWeights[7] = {0, 0, 3, 2, 1, 0, 0};
+
+int safeChecks[7] = {0, 0, 366, 326, 487, 326, 0};
+int unsafeChecks[7] = {0, 0, 79, 160, 132, 104, 0};
+int contactChecks[2] = {50, 186};
+
+int kingDangerBase = 0;
+int kingAttack = 52;
+int kingPin = 37;
+int discoveredCheck = 37;
+int kingWeak = 96;
+int kingMobilityWeight = 1;
+int noQueen = 584;
+
+const Score pawnShieldBonus = S(10, 1);
+const Score canCastle = S(50,-10);
+const Score diagTropism = S(5,1);
+const Score rookTropism = S(5,1);
+const Score backRank = S(5,5);
+
+const Score bishopPair = S(50,50);
+const Score knightPair = S(30,30);
+const Score rookPair = S(10,10);
+const Score knightPawn = S(6,6);
+const Score rookPawn = S(-12,-12);
 
 /****************** Not modified ******************/
 const int pieceValues[2][14] = {{0, 0, PAWN_MG, PAWN_MG, KNIGHT_MG, KNIGHT_MG, BISHOP_MG, BISHOP_MG, ROOK_MG, ROOK_MG, QUEEN_MG, QUEEN_MG, 0, 0},

@@ -21,9 +21,7 @@
 int main(int argc, char **argv)
 {
 	Position::init();
-	//get_ready();
 	init_tt();
-	book.init(openingBookPath);
 
 	if (argc > 1 && strstr(argv[1], "bench"))
     {

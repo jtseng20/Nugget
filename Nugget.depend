@@ -1,0 +1,71 @@
+# depslib dependency file v1.0
+1602309903 source:/home/drstrange767/Nugget/src/magic.cpp
+	"Nugget.h"
+
+1604395845 /home/drstrange767/Nugget/src/Nugget.h
+	<iostream>
+	<iomanip>
+	<stdarg.h>
+	<cstring>
+	<string>
+	<iostream>
+	<fstream>
+	<list>
+	<string>
+	<string.h>
+	<sstream>
+	<vector>
+	<algorithm>
+	<iterator>
+	<thread>
+	<map>
+	<array>
+	<bitset>
+	<limits.h>
+	<math.h>
+	<regex>
+	<stdlib.h>
+	<assert.h>
+	<setjmp.h>
+	<chrono>
+	<Windows.h>
+	<time.h>
+	<sys/time.h>
+
+1602309903 source:/home/drstrange767/Nugget/src/movegen.cpp
+	"Nugget.h"
+
+1602468521 source:/home/drstrange767/Nugget/src/time.cpp
+	"Nugget.h"
+
+1604312958 source:/home/drstrange767/Nugget/src/board.cpp
+	"Nugget.h"
+
+1604394408 source:/home/drstrange767/Nugget/src/weights.cpp
+	"Nugget.h"
+
+1602408764 source:/home/drstrange767/Nugget/src/main.cpp
+	"Nugget.h"
+
+1603097816 source:/home/drstrange767/Nugget/src/uci.cpp
+	"Nugget.h"
+
+1603095886 source:/home/drstrange767/Nugget/src/util.cpp
+	"Nugget.h"
+	<sys/mman.h>
+
+1602408846 source:/home/drstrange767/Nugget/src/position.cpp
+	"Nugget.h"
+
+1602312729 source:/home/drstrange767/Nugget/src/psqt.cpp
+	"Nugget.h"
+
+1603071392 source:/home/drstrange767/Nugget/src/hash.cpp
+	"Nugget.h"
+
+1604316300 source:/home/drstrange767/Nugget/src/net.cpp
+	"Nugget.h"
+
+1603097875 source:/home/drstrange767/Nugget/src/thread.cpp
+	"Nugget.h"
+

@@ -159,8 +159,8 @@ const string move_to_str(Move code)
 void bench()
 {
     uint64_t nodes = 0;
-    int benchStart = getRealTime();
-    is_timeout = false;
+    int benchStart = getCurrentTime();
+    STOPSEARCHING = false;
     globalLimits.movesToGo = 0;
     globalLimits.totalTimeLeft = 0;
     globalLimits.increment = 0;
@@ -175,12 +175,12 @@ void bench()
         clear_threads();
         clear_tt();
         Position *p = import_fen(benchmarks[i].c_str(), 0);
-        get_ready();
+        clear_stacks();
         think(p);
         nodes += main_thread.nodes;
     }
 
-    int time_taken = getRealTime() - benchStart;
+    int time_taken = getCurrentTime() - benchStart;
 
     cout << "\n------------------------\n";
     cout << "Time  : " << time_taken << endl;

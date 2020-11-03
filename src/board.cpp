@@ -42,6 +42,7 @@ U64 passedPawnMasks[2][64];
 U64 pawnBlockerMasks[2][64];
 U64 phalanxMasks[64];
 U64 kingRing[64];
+U64 connectedMasks[64];
 int mvvlva[14][14];
 U64 distanceRings[64][8];
 U64 colorMasks[64];
@@ -240,6 +241,7 @@ void init_boards()
 
     for (int i = 0; i < 64; i++)
     {
+        connectedMasks[i] = kingRing[i] & ~FILE_MASKS[i];
         PseudoAttacks[QUEEN][i] = PseudoAttacks[BISHOP][i] = bishopAttacks(0, i);
         PseudoAttacks[QUEEN][i] |= PseudoAttacks[ROOK][i] = rookAttacks(0, i);
         for (int j = 0; j < 64; j++)
@@ -260,25 +262,4 @@ void init_boards()
         castlekingwalk[i] = BETWEEN_MASKS[4 + 56 * side][castleKingTo[i]] | BITSET(castleKingTo[i]);
     }
 
-}
-
-
-
-
-int imbalance(const int piece_count[5][5], Color color) {
-    int bonus = 0;
-
-    // Second-degree polynomial material imbalance, by Tord Romstad
-    for (int pt1 = 0; pt1 < 5; ++pt1) {
-        if (!piece_count[color][pt1]) {
-            continue;
-        }
-
-        for (int pt2 = 0; pt2 <= pt1; ++pt2) {
-            bonus += my_pieces[pt1][pt2] * piece_count[color][pt1] * piece_count[color][pt2] +
-                     opponent_pieces[pt1][pt2] * piece_count[color][pt1] * piece_count[~color][pt2];
-        }
-    }
-
-    return bonus;
 }

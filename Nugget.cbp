@@ -34,11 +34,16 @@
 		</Compiler>
 		<Unit filename="src/Nugget.h" />
 		<Unit filename="src/board.cpp" />
+		<Unit filename="src/eval.cpp" />
+		<Unit filename="src/hash.cpp" />
 		<Unit filename="src/magic.cpp" />
 		<Unit filename="src/main.cpp" />
 		<Unit filename="src/movegen.cpp" />
+		<Unit filename="src/net.cpp" />
 		<Unit filename="src/position.cpp" />
 		<Unit filename="src/psqt.cpp" />
+		<Unit filename="src/thread.cpp" />
+		<Unit filename="src/time.cpp" />
 		<Unit filename="src/uci.cpp" />
 		<Unit filename="src/util.cpp" />
 		<Unit filename="src/weights.cpp" />
