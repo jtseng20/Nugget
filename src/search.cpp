@@ -165,8 +165,138 @@ void get_best_move(Position *pos)
     fflush(stdout);
 }
 
+bool isDraw(Position *pos)
+{
+    return true;
+}
+
+inline void check_time(SearchThread *thread)
+{
+    if ((thread->nodes & 1024) == 1024 && time_passed() >= max_usage && !ISPONDERING && timeLimit)
+        STOPSEARCHING = true;
+}
+
 int alphaBeta(SearchThread *thread, searchInfo *info, int depth, int alpha, int beta)
 {
-    int score = UNDEFINED;
-    return score;
+    if (depth < 1)
+        return qSearch(thread, info, 0, alpha, beta);
+
+    Position *pos = &thread->position;
+    bool isPV, isRoot, inCheck, isQuiet, skipQuiets;
+    int score, reduction, moveCount, newDepth, ply = info->ply;
+    Move m, hashMove, bestMove;
+
+    isPV = beta - alpha > 1;
+    isRoot = ply == 0;
+    inCheck = pos->checkBB;
+
+    if (isPV)
+        info->pvLen = 0;
+
+    if (thread->thread_id == 0)
+        check_time(thread);
+
+    // Early return
+    if (!isRoot)
+    {
+        if (STOPSEARCHING)
+            longjmp(thread->jbuffer, 1);
+
+        if (isDraw(pos))
+            return 1 - (thread->nodes & 2);
+
+        if (ply >= MAX_PLY)
+            return inCheck ? 0 : evaluate(*pos);
+
+        // Mate distance pruning
+        alpha = max(VALUE_MATED + ply, alpha);
+        beta = min(VALUE_MATE - ply, beta);
+        if (alpha >= beta)
+            return alpha;
+    }
+
+    // Hash table
+
+    // TB
+
+    // Static eval
+
+    // Razoring
+
+    // Reverse Futility
+
+    // NMP
+
+    // ProbCut
+
+    // IID
+
+    // Move loop
+    MoveGen movegen = MoveGen(pos, NORMAL_SEARCH, hashMove, 0, depth);
+    bestMove = MOVE_NONE;
+    int bestScore = -VALUE_INF;
+    while((m = movegen.next_move(info, skipQuiets)) != MOVE_NONE)
+    {
+        moveCount++;
+        // Early / Late pruning
+
+        // Do Move
+        pos->do_move(m);
+        thread->nodes++;
+
+        // Extensions
+        newDepth = depth;
+
+        // Reductions
+
+        // Full Search for first move
+        if (isPV && moveCount == 1)
+            score = -alphaBeta(thread, info+1, newDepth, -beta, -alpha);
+        else
+        {
+            reduction = 0;
+            // do LMR
+
+
+            // Reduced search
+            score = -alphaBeta(thread, info+1, newDepth - reduction, -alpha-1, -alpha);
+
+            // Null window search
+            if (reduction > 0 && score > alpha)
+                score = -alphaBeta(thread, info+1, newDepth, -alpha-1, -alpha);
+
+            // Full search for first move or for any later exact scores
+            if (isPV && ((score > alpha && score < beta) || moveCount == 1))
+                score = -alphaBeta(thread, info+1, newDepth, -beta, -alpha);
+        }
+
+        // Undo Move
+        pos->undo_move(m);
+
+        // New best move
+        if (score > bestScore)
+        {
+            bestScore = score;
+            if (score > alpha)
+            {
+                // Update PV
+
+                bestMove = m;
+                if (isPV && score < beta)
+                    alpha = score;
+                else
+                    break;
+            }
+        }
+    }
+
+    // Stalemate or mate?
+    if (!moveCount)
+        return inCheck ? VALUE_MATED + ply : 0;
+
+    // Update all history scores
+
+    // Save Hash entry
+
+    return bestScore;
 }

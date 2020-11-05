@@ -983,7 +983,7 @@ void bench();
 void get_best_move(Position *p);
 void loop();
 int alphaBeta(SearchThread *thread, searchInfo *info, int depth, int alpha, int beta);
-
+int qSearch(SearchThread *thread, searchInfo *info, int depth, int alpha, int beta);
 //Ethereal bench positions
 const std::string benchmarks[36] = {
     "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
