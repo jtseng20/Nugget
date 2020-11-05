@@ -167,7 +167,6 @@ void bench()
     globalLimits.movetime = 0;
     globalLimits.depthlimit = 13;
     globalLimits.timelimited = false;
-    globalLimits.depthlimited = true;
     globalLimits.infinite = false;
 
     for (int i = 0; i < 36; i++){
@@ -176,7 +175,7 @@ void bench()
         clear_tt();
         Position *p = import_fen(benchmarks[i].c_str(), 0);
         clear_stacks();
-        think(p);
+        get_best_move(p);
         nodes += main_thread.nodes;
     }
 

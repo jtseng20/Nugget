@@ -878,7 +878,7 @@ extern int threadCount;
 extern SearchThread main_thread;
 extern SearchThread* search_threads;
 
-inline void* get_thread(int thread_id) { return thread_id == 0 ? &main_thread : &search_threads[thread_id - 1]; }
+inline SearchThread* get_thread(int thread_id) { return thread_id == 0 ? &main_thread : &search_threads[thread_id - 1]; }
 void clear_threads();
 
 
@@ -905,7 +905,7 @@ inline int time_passed() {
 inline U64 sum_nodes() {
     U64 s = 0;
     for (int i = 0; i < threadCount; ++i) {
-        SearchThread* t = (SearchThread*)get_thread(i);
+        SearchThread* t = get_thread(i);
         s += t->nodes;
     }
     return s;
@@ -914,7 +914,7 @@ inline U64 sum_nodes() {
 inline U64 sum_tb_hits() {
     U64 s = 0;
     for (int i = 0; i < threadCount; ++i) {
-        SearchThread *t = (SearchThread*)get_thread(i);
+        SearchThread *t = get_thread(i);
         s += t->tb_hits;
     }
     return s;
@@ -922,7 +922,7 @@ inline U64 sum_tb_hits() {
 
 inline void initialize_nodes() {
     for (int i = 0; i < threadCount; ++i) {
-        SearchThread* t = (SearchThread*)get_thread(i);
+        SearchThread* t = get_thread(i);
         t->nodes = 0;
         t->tb_hits = 0;
     }
@@ -944,6 +944,12 @@ struct timeInfo {
     bool timelimited; // "movetime" mode
     bool depthlimited; // "depth" mode
     bool infinite; // "infinite" mode; if none of these flags are set, then time is managed
+};
+
+struct moveTimeManager
+{
+    Move pastPVs[MAX_PLY+1];
+    bool latestIsEasy;
 };
 
 timeTuple calculate_time();
@@ -974,8 +980,9 @@ constexpr U64 bishopMagics[] = { 0x40106000a1160020, 0x0020010250810120, 0x20100
 
 
 void bench();
-void think(Position *p);
+void get_best_move(Position *p);
 void loop();
+int alphaBeta(SearchThread *thread, searchInfo *info, int depth, int alpha, int beta);
 
 //Ethereal bench positions
 const std::string benchmarks[36] = {
@@ -1022,6 +1029,7 @@ const std::string benchmarks[36] = {
 constexpr int lazyThreshold = 1300;
 constexpr int NETSCALEFACTOR = 115;
 constexpr int tempo = 30;
+constexpr int ASPIRATION_DELTA = 15;
 
 constexpr bool isEdge[64] = {1, 0, 0, 0, 0, 0, 0, 1,
                                 1, 0, 0, 0, 0, 0, 0, 1,

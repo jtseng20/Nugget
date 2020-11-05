@@ -54,6 +54,15 @@ void storeEntry(TTEntry *entry, U64 key, Move m, int depth, int score, int stati
     }
 }
 
+int hashfull()
+{
+    int out = 0;
+    for (int i = 0; i < 1000; i++)
+        for (int j = 0; j < 3; j++)
+            out += (tte_age(&TT.table[i].entries[j]) == TT.generation);
+    return out / 3;
+}
+
 TTEntry *probeTT(U64 key, bool &ttHit)
 {
     U64 index = key & TT.size_mask;

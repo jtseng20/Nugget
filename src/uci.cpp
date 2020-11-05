@@ -219,8 +219,8 @@ void uci() {
 
 void go() {
     prepareThreads();
-    int depth = 0;
-    bool infinite = false, timelimited = false, depthlimited = false;
+    int depth = MAX_PLY;
+    bool infinite = false, timelimited = false;
     int wtime = 0, btime = 0, movetime = 0;
     int winc = 0, binc = 0, movestogo = 0;
     depthLimit = MAX_PLY;
@@ -231,9 +231,8 @@ void go() {
         globalLimits.totalTimeLeft = 10000;
         globalLimits.increment = 0;
         globalLimits.movetime = 0;
-        globalLimits.depthlimit = 0;
+        globalLimits.depthlimit = depth;
         globalLimits.timelimited = true;
-        globalLimits.depthlimited = false;
         globalLimits.infinite = false;
     }
 
@@ -263,7 +262,6 @@ void go() {
             }
             else if (args[i] == "depth")
             {
-                depthlimited = true;
                 depth = stoi(args[i + 1]);
             }
 
@@ -288,11 +286,10 @@ void go() {
     globalLimits.movetime = movetime;
     globalLimits.depthlimit = depth;
     globalLimits.timelimited = timelimited;
-    globalLimits.depthlimited = depthlimited;
     globalLimits.infinite = infinite;
     }
 
-    std::thread think_thread(think, root_position);
+    std::thread think_thread(get_best_move, root_position);
     think_thread.detach();
 }
 

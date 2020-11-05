@@ -97,10 +97,11 @@ template <Color side> Score Eval::evaluate_pawn_structure()
 
         yesmarker = (1 << FILE(sq));
         nomarker = ~(yesmarker);
-        // tell the semiopen files tracker that this file is NOT semiopen (because there's a pawn here)
+        // Tell the semiopen files tracker that this file is NOT semiopen (because there's a pawn here)
         pawntte->semiopenFiles[side] &= nomarker;
 
-        // update the doubled files tracker if doubled. If NOT doubled, then this pawn is the foremost pawn, so check if it's defended.
+        // Update the doubled files tracker if doubled. If NOT doubled, then this pawn is the foremost pawn, so check if it's defended.
+        // If doubled, then don't do the supported check because there's another pawn in front of it.
         if (doubled)
             pawntte->doubledFiles[side] |= yesmarker;
         else if (supported)
